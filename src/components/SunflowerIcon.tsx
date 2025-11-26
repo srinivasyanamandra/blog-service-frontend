@@ -1,0 +1,22 @@
+import React from "react";
+
+export const SunflowerIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="4" fill="#8B4513" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(0 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(45 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(90 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(135 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(180 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(225 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(270 12 12)" />
+      <ellipse cx="12" cy="6" rx="2" ry="3" fill="#FFC312" transform="rotate(315 12 12)" />
+    </svg>
+  );
+};

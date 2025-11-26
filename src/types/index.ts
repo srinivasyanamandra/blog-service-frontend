@@ -1,0 +1,60 @@
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: 'AUTHOR' | 'ADMIN' | 'READER';
+  lastLoginAt: string;
+}
+
+export interface Author {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface Post {
+  id: number;
+  author: Author;
+  title: string;
+  slug: string;
+  shareToken: string;
+  content: string;
+  excerpt: string;
+  coverImageUrl: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  isPublic: boolean;
+  allowComments: boolean;
+  views: Record<string, number>;
+  likes: Record<string, boolean | number>;
+  favorites: Record<string, boolean>;
+  comments: Record<string, Comment>;
+  metrics: {
+    readingTimeMin: number;
+    wordCount: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Comment {
+  id: string;
+  author: string;
+  userId?: number;
+  content: string;
+  createdAt: string;
+  replies: Comment[];
+}
+
+export interface DashboardMetrics {
+  totalPosts: number;
+  published: number;
+  drafts: number;
+  totalViews: number;
+  totalLikes: number;
+  topPosts: Array<{
+    id: number;
+    title: string;
+    views: number;
+    likes: number;
+  }>;
+}
