@@ -372,13 +372,103 @@ export const mockApi = {
         .sort((a, b) => b.views - a.views)
         .slice(0, 5);
 
+      const publishedCount = userPosts.filter(p => p.status === 'PUBLISHED').length;
+      const draftsCount = userPosts.filter(p => p.status === 'DRAFT').length;
       return {
         totalPosts: userPosts.length,
-        published: userPosts.filter(p => p.status === 'PUBLISHED').length,
-        drafts: userPosts.filter(p => p.status === 'DRAFT').length,
+        // backwards-compatible keys
+        published: publishedCount,
+        drafts: draftsCount,
+        // new keys expected by the dashboard UI
+        publishedPosts: publishedCount,
+        draftPosts: draftsCount,
         totalViews,
         totalLikes,
         topPosts,
+      } as any;
+    },
+  },
+  dashboard: {
+    get: async () => {
+      return mockApi.analytics.getDashboardMetrics();
+    },
+
+    posts: async (params: {
+      page?: number;
+      size?: number;
+      title?: string;
+      status?: string;
+      createdFrom?: string;
+      createdTo?: string;
+      sortDirection?: 'ASC' | 'DESC';
+    } = {}) => {
+      await delay(300);
+      const page = params.page ?? 0;
+      const size = params.size ?? 10;
+
+      const userPosts = mockPosts.filter(p => p.author.id === currentUser?.id);
+
+      let filtered = userPosts.slice();
+
+      if (params.title) {
+        const t = params.title.toLowerCase();
+        filtered = filtered.filter(p => p.title.toLowerCase().includes(t));
+      }
+
+      if (params.status) {
+        filtered = filtered.filter(p => p.status === params.status);
+      }
+
+      if (params.createdFrom) {
+        const from = new Date(params.createdFrom).getTime();
+        filtered = filtered.filter(p => new Date(p.createdAt).getTime() >= from);
+      }
+
+      if (params.createdTo) {
+        const to = new Date(params.createdTo).getTime();
+        filtered = filtered.filter(p => new Date(p.createdAt).getTime() <= to);
+      }
+
+      filtered.sort((a, b) => {
+        const aTs = new Date(a.createdAt).getTime();
+        const bTs = new Date(b.createdAt).getTime();
+        if (params.sortDirection === 'ASC') return aTs - bTs;
+        return bTs - aTs;
+      });
+
+      const totalElements = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(totalElements / size));
+      const start = page * size;
+      const content = filtered.slice(start, start + size).map(p => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        excerpt: p.excerpt,
+        content: p.content,
+        coverImageUrl: p.coverImageUrl,
+        shareToken: p.shareToken,
+        tags: [],
+        status: p.status,
+        isPublic: p.isPublic,
+        authorName: p.author.name,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        metrics: {
+          views: Object.values(p.views).reduce((a, b) => a + b, 0),
+          likes: Object.values(p.likes).reduce((a, b) => a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0),
+          comments: Object.values(p.comments || {}).length,
+        },
+      }));
+
+      return {
+        content,
+        pageNumber: page,
+        pageSize: size,
+        totalElements,
+        totalPages,
+        first: page === 0,
+        last: page >= totalPages - 1,
+        empty: content.length === 0,
       };
     },
   },
