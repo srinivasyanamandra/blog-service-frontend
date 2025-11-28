@@ -16,19 +16,17 @@ export class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
+    const headers = new Headers(options.headers as HeadersInit);
+    // ensure content-type set
+    headers.set('Content-Type', 'application/json');
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+      headers.set('Authorization', `Bearer ${this.token}`);
     }
 
     const response = await fetch(url, {
       ...options,
       headers,
-    });
+    } as RequestInit);
 
     if (!response.ok) {
       // If unauthorized, clear token and stored credentials and notify the app
@@ -244,6 +242,29 @@ export class ApiClient {
   dashboard = {
     get: async () => {
       return this.request('/api/dashboard', {
+        method: 'GET',
+      });
+    },
+
+    posts: async (params: {
+      page?: number;
+      size?: number;
+      title?: string;
+      status?: string;
+      createdFrom?: string;
+      createdTo?: string;
+      sortDirection?: 'ASC' | 'DESC';
+    } = {}) => {
+      const q = new URLSearchParams();
+      if (params.page !== undefined) q.append('page', String(params.page));
+      if (params.size !== undefined) q.append('size', String(params.size));
+      if (params.title) q.append('title', params.title);
+      if (params.status) q.append('status', params.status);
+      if (params.createdFrom) q.append('createdFrom', params.createdFrom);
+      if (params.createdTo) q.append('createdTo', params.createdTo);
+      if (params.sortDirection) q.append('sortDirection', params.sortDirection);
+
+      return this.request(`/api/dashboard/posts?${q.toString()}`, {
         method: 'GET',
       });
     },

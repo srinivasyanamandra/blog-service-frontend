@@ -243,6 +243,24 @@ interface Post {
 }
 ```
 
+### Get Dashboard Posts (Paginated)
+Use this endpoint to fetch posts with server-side pagination, filtering, and sort.
+
+```typescript
+const page = await apiClient.dashboard.posts({
+  page: 0,
+  size: 10,
+  title: 'spring',
+  status: 'PUBLISHED',
+  createdFrom: '2024-01-01T00:00:00',
+  createdTo: '2024-12-31T23:59:59',
+  sortDirection: 'DESC'
+});
+console.log(page.content, page.totalElements, page.totalPages);
+```
+
+The response structure is the same as described in the API docs: `content`, `pageNumber`, `pageSize`, `totalElements`, `totalPages`, `first`, `last`, `empty`.
+
 ### Comment Entry
 ```typescript
 interface CommentEntry {
