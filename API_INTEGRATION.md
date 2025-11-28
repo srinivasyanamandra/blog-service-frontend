@@ -130,7 +130,8 @@ await apiClient.posts.delete(postId);
 ### Access Public Post
 ```typescript
 // No auth required - anyone can view
-const post = await apiClient.posts.getPublic(shareToken);
+// Optionally pass skipView=true to ensure the server does not increment view count (useful for API crawlers or tooling)
+const post = await apiClient.posts.getPublic(shareToken, undefined, undefined, undefined, undefined, true);
 ```
 
 **Response contains:**
@@ -247,14 +248,14 @@ interface Post {
 Use this endpoint to fetch posts with server-side pagination, filtering, and sort.
 
 ```typescript
-const page = await apiClient.dashboard.posts({
+const page = await apiClient.dashboard.get({
   page: 0,
   size: 10,
-  title: 'spring',
+  search: 'spring',
   status: 'PUBLISHED',
-  createdFrom: '2024-01-01T00:00:00',
-  createdTo: '2024-12-31T23:59:59',
-  sortDirection: 'DESC'
+  fromDate: '2024-01-01T00:00:00',
+  toDate: '2024-12-31T23:59:59',
+  sortBy: 'RECENT'
 });
 console.log(page.content, page.totalElements, page.totalPages);
 ```

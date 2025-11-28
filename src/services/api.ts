@@ -173,12 +173,13 @@ export class ApiClient {
       });
     },
 
-    getPublic: async (shareToken: string, guestName?: string, viewerGuestId?: string, referrer?: string, userAgent?: string) => {
+    getPublic: async (shareToken: string, guestName?: string, viewerGuestId?: string, referrer?: string, userAgent?: string, skipView?: boolean) => {
       const params = new URLSearchParams();
       if (guestName) params.append('guestName', guestName);
       if (viewerGuestId) params.append('viewerGuestId', viewerGuestId);
       if (referrer) params.append('referrer', referrer);
       if (userAgent) params.append('User-Agent', userAgent);
+      if (typeof skipView !== 'undefined') params.append('skipView', String(skipView));
 
       const queryString = params.toString();
       return fetch(
@@ -240,31 +241,27 @@ export class ApiClient {
   };
 
   dashboard = {
-    get: async () => {
-      return this.request('/api/dashboard', {
-        method: 'GET',
-      });
-    },
-
-    posts: async (params: {
+    get: async (params: {
+      search?: string;
+      status?: string;
+      fromDate?: string;
+      toDate?: string;
+      favoritesOnly?: boolean;
+      sortBy?: 'RECENT' | 'TOP_VIEWS' | 'TOP_LIKES' | 'TOP_COMMENTS';
       page?: number;
       size?: number;
-      title?: string;
-      status?: string;
-      createdFrom?: string;
-      createdTo?: string;
-      sortDirection?: 'ASC' | 'DESC';
     } = {}) => {
       const q = new URLSearchParams();
-      if (params.page !== undefined) q.append('page', String(params.page));
-      if (params.size !== undefined) q.append('size', String(params.size));
-      if (params.title) q.append('title', params.title);
+      if (params.search) q.append('search', params.search);
       if (params.status) q.append('status', params.status);
-      if (params.createdFrom) q.append('createdFrom', params.createdFrom);
-      if (params.createdTo) q.append('createdTo', params.createdTo);
-      if (params.sortDirection) q.append('sortDirection', params.sortDirection);
+      if (params.fromDate) q.append('fromDate', params.fromDate);
+      if (params.toDate) q.append('toDate', params.toDate);
+      if (typeof params.favoritesOnly !== 'undefined') q.append('favoritesOnly', String(params.favoritesOnly));
+      if (params.sortBy) q.append('sortBy', params.sortBy);
+      if (typeof params.page !== 'undefined') q.append('page', String(params.page));
+      if (typeof params.size !== 'undefined') q.append('size', String(params.size));
 
-      return this.request(`/api/dashboard/posts?${q.toString()}`, {
+      return this.request(`/api/dashboard?${q.toString()}`, {
         method: 'GET',
       });
     },

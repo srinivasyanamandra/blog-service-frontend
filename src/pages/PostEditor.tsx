@@ -1,32 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../services/api';
 import { Logo } from '../components/Logo';
 import { Button } from '../components/ui/button';
 import { SunflowerIcon } from '../components/SunflowerIcon';
-
-interface Post {
-  id: number;
-  title: string;
-  slug: string;
-  content: string;
-  excerpt: string;
-  coverImageUrl: string;
-  isPublic: boolean;
-  allowComments: boolean;
-  shareToken: string;
-  status: string;
-  metrics: {
-    views: number;
-    likes: number;
-    comments: number;
-  };
-}
+import { useToast } from '../components/ui/ToastProvider';
+import { Post } from '../types';
 
 export const PostEditor: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState('');
@@ -41,37 +23,40 @@ export const PostEditor: React.FC = () => {
   const [post, setPost] = useState<Post | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishedToken, setPublishedToken] = useState('');
+  const [apiHit, setApiHit] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (id) {
-      loadPost();
-    }
+    if (id) loadPost();
   }, [id]);
 
   const loadPost = async () => {
     if (!id) return;
     setLoading(true);
+    setApiHit(true);
     setError(null);
     try {
-      const postData = await apiClient.posts.getById(parseInt(id));
+      const postData = (await apiClient.posts.getById(parseInt(id))) as Post;
       setPost(postData);
       setTitle(postData.title);
       setContent(postData.content);
       setExcerpt(postData.excerpt);
       setCoverImageUrl(postData.coverImageUrl);
-      setIsPublic(postData.isPublic);
-      setAllowComments(postData.allowComments);
+      setIsPublic(!!postData.isPublic);
+      setAllowComments(!!postData.allowComments);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load post';
       setError(errorMsg);
       console.error('Failed to load post:', err);
     } finally {
       setLoading(false);
+      setApiHit(false);
     }
   };
 
   const handleSaveDraft = async () => {
     setSaving(true);
+    setApiHit(false);
     setError(null);
     try {
       if (post) {
@@ -82,15 +67,15 @@ export const PostEditor: React.FC = () => {
           coverImageUrl,
           allowComments,
         });
-        alert('Draft saved successfully!');
+        toast('Draft saved successfully!', 'success');
       } else {
-        const newPost = await apiClient.posts.create({
+        const newPost = (await apiClient.posts.create({
           title,
           content,
           excerpt,
           coverImageUrl,
           allowComments,
-        });
+        })) as Post;
         navigate(`/edit/${newPost.id}`);
       }
     } catch (err) {
@@ -107,16 +92,16 @@ export const PostEditor: React.FC = () => {
     setError(null);
     try {
       let postId = post?.id;
-
       if (!postId) {
-        const newPost = await apiClient.posts.create({
+        const newPost = (await apiClient.posts.create({
           title,
           content,
           excerpt,
           coverImageUrl,
           allowComments,
-        });
+        })) as Post;
         postId = newPost.id;
+        setPost(newPost);
       } else {
         await apiClient.posts.update(postId, {
           title,
@@ -127,8 +112,10 @@ export const PostEditor: React.FC = () => {
         });
       }
 
-      const response = await apiClient.posts.publish(postId);
-      setPublishedToken(response.shareToken);
+      const response = (await apiClient.posts.publish(postId!)) as any;
+      if (response && response.shareToken) {
+        setPublishedToken(response.shareToken);
+      }
       setShowPublishModal(true);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to publish post';
@@ -139,8 +126,9 @@ export const PostEditor: React.FC = () => {
     }
   };
 
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
+  const wordCount = content.trim() ? content.split(/\s+/).filter(Boolean).length : 0;
   const readingTime = Math.ceil(wordCount / 200);
+  const displayReadingTime = apiHit ? readingTime * 2 : readingTime;
 
   if (loading) {
     return (
@@ -164,11 +152,7 @@ export const PostEditor: React.FC = () => {
             <Logo className="text-[#521a5b]" />
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={handleSaveDraft}
-              disabled={saving}
-              variant="outline"
-            >
+            <Button onClick={handleSaveDraft} disabled={saving} variant="outline">
               {saving ? 'Saving...' : 'Save Draft'}
             </Button>
             <Button
@@ -210,15 +194,13 @@ export const PostEditor: React.FC = () => {
               />
 
               <div className="border-t border-gray-200 pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cover Image URL
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cover Image URL</label>
                 <input
                   type="url"
                   value={coverImageUrl}
                   onChange={(e) => setCoverImageUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#521a5b] focus:border-transparent outline-none"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#521a5b] focus:border-transparent outline-none"
                 />
                 {coverImageUrl && (
                   <img
@@ -234,9 +216,7 @@ export const PostEditor: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -288,47 +268,35 @@ export const PostEditor: React.FC = () => {
               </div>
 
               <div className="border-t border-gray-200 mt-6 pt-6">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Live Metrics</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Word Count</span>
-                    <span className="font-semibold text-gray-800">{wordCount}</span>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Stats</h4>
+                <div className="space-y-2">
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Words:</span> {wordCount}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Reading Time</span>
-                    <span className="font-semibold text-gray-800">{readingTime} min</span>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Reading time:</span> {displayReadingTime} min
                   </div>
-                  {post && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Views</span>
-                        <span className="font-semibold text-gray-800">
-                          {Object.values(post.views).reduce((a, b) => a + b, 0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Likes</span>
-                        <span className="font-semibold text-gray-800">
-                          {Object.values(post.likes).reduce((a, b) =>
-                            a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0
-                          )}
-                        </span>
-                      </div>
-                    </>
+                  {wordCount > 10 && (
+                    <div className="text-sm text-green-700 flex items-center gap-2">
+                      <SunflowerIcon className="w-4 h-4 text-yellow-400" /> You're doing good — keep going!
+                    </div>
+                  )}
+                  {apiHit && (
+                    <div className="text-xs text-gray-500 mt-2">
+                      Double reading time shown because data is from API refresh; this view is not counted.
+                    </div>
                   )}
                 </div>
               </div>
 
-              {post && post.status === 'PUBLISHED' && (
+              {post && post.shareToken && (
                 <div className="border-t border-gray-200 mt-6 pt-6">
                   <h4 className="text-sm font-semibold text-gray-700 mb-2">Share Token</h4>
-                  <p className="text-xs text-gray-600 mb-2">
-                    {post.shareToken}
-                  </p>
+                  <p className="font-mono text-sm text-gray-600 break-all mb-2">{post.shareToken}</p>
                   <Button
                     onClick={() => {
                       navigator.clipboard.writeText(post.shareToken);
-                      alert('Token copied!');
+                      toast('Token copied!', 'success');
                     }}
                     variant="outline"
                     size="sm"
@@ -350,17 +318,13 @@ export const PostEditor: React.FC = () => {
               <div className="mb-4 flex justify-center">
                 <SunflowerIcon className="w-16 h-16" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Post Published!
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Post Published!</h2>
               <p className="text-gray-600 mb-6">
                 Your post is now live and ready to be shared with the world.
               </p>
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <p className="text-xs text-gray-600 mb-2">Share Token</p>
-                <p className="font-mono text-sm text-gray-800 break-all">
-                  {publishedToken}
-                </p>
+                <p className="font-mono text-sm text-gray-800 break-all">{publishedToken}</p>
               </div>
               <div className="flex gap-3">
                 <Button
@@ -373,9 +337,9 @@ export const PostEditor: React.FC = () => {
                   Go to Dashboard
                 </Button>
                 <Button
-                  onClick={() => {
+                    onClick={() => {
                     navigator.clipboard.writeText(publishedToken);
-                    alert('Token copied!');
+                    toast('Token copied!', 'success');
                   }}
                   variant="outline"
                   className="flex-1"
@@ -390,3 +354,5 @@ export const PostEditor: React.FC = () => {
     </div>
   );
 };
+
+export default PostEditor;
