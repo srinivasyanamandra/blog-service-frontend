@@ -13,89 +13,150 @@ const slugify = (text: string): string => {
 
 const generateToken = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
+    dashboard: {
+      get: async (params: {
+        search?: string;
+        status?: string;
+        fromDate?: string;
+        toDate?: string;
+        favoritesOnly?: boolean;
+        sortBy?: 'RECENT' | 'TOP_VIEWS' | 'TOP_LIKES' | 'TOP_COMMENTS';
+        page?: number;
+        size?: number;
+      } = {}) => {
+        await delay(300);
+        const page = params.page ?? 0;
+        const size = params.size ?? 10;
 
-let currentUser: User | null = null;
+        const userPosts = mockPosts.filter(p => p.author.id === currentUser?.id);
 
-const mockUsers: User[] = [
-  {
-    id: 1,
-    name: 'Srinivas',
-    email: 'srinivas@pranublog.com',
-    role: 'AUTHOR',
-    lastLoginAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    name: 'Demo User',
-    email: 'demo@pranublog.com',
-    role: 'AUTHOR',
-    lastLoginAt: new Date().toISOString(),
-  },
-];
+        // Metrics
+        const totalViews = userPosts.reduce((sum, post) => sum + Object.values(post.views).reduce((a, b) => a + b, 0), 0);
+        const totalLikes = userPosts.reduce((sum, post) => sum + Object.values(post.likes).reduce((a, b) => a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0), 0);
+        const totalComments = userPosts.reduce((sum, post) => sum + Object.values(post.comments || {}).length, 0);
+        const totalFavorites = userPosts.reduce((sum, post) => sum + Object.values(post.favorites || {}).filter(Boolean).length, 0);
 
-let mockPosts: Post[] = [
-  {
-    id: 101,
-    author: { id: 1, name: 'Srinivas', email: 'srinivas@pranublog.com' },
-    title: 'How to Build PranuBlog',
-    slug: 'how-to-build-pranublog',
-    shareToken: generateToken(),
-    content: '<h2>Introduction</h2><p>Building a modern blog platform requires careful planning and execution. In this post, we will explore the key features and architecture of PranuBlog.</p><h2>Key Features</h2><p>PranuBlog offers a rich set of features including draft management, analytics, comments, and more.</p>',
-    excerpt: 'Learn how to build a modern blog platform with React and TypeScript',
-    coverImageUrl: 'https://images.pexels.com/photos/546819/pexels-photo-546819.jpeg?auto=compress&cs=tinysrgb&w=800',
-    status: 'PUBLISHED',
-    isPublic: true,
-    allowComments: true,
-    views: { '2025-11-20': 120, '2025-11-21': 95, '2025-11-22': 150 },
-    likes: { guest: 15, user_1: true, user_2: true },
-    favorites: { user_1: true },
-    comments: {
-      c1: {
-        id: 'c1',
-        author: 'Guest User',
-        content: 'Great article! Very informative.',
-        createdAt: '2025-11-21T10:30:00',
-        replies: [
-          {
-            id: 'c1-r1',
-            author: 'Srinivas',
-            userId: 1,
-            content: 'Thank you for reading!',
-            createdAt: '2025-11-21T11:00:00',
-            replies: [],
+        const publishedCount = userPosts.filter(p => p.status === 'PUBLISHED').length;
+        const draftsCount = userPosts.filter(p => p.status === 'DRAFT').length;
+
+        // Build recentPosts (RECENT sorted by createdAt desc)
+        const recentSorted = userPosts.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const recentStart = 0;
+        const recentContent = recentSorted.slice(recentStart, recentStart + Math.max(5, size)).map(p => ({
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          excerpt: p.excerpt,
+          coverImageUrl: p.coverImageUrl,
+          status: p.status,
+          isPublic: p.isPublic,
+          allowComments: p.allowComments,
+          shareToken: p.shareToken,
+          metrics: {
+            views: Object.values(p.views).reduce((a, b) => a + b, 0),
+            likes: Object.values(p.likes).reduce((a, b) => a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0),
+            comments: Object.values(p.comments || {}).length,
+            recentActivity: [],
           },
-        ],
-      },
-      c2: {
-        id: 'c2',
-        author: 'Tech Enthusiast',
-        content: 'Looking forward to more posts like this.',
-        createdAt: '2025-11-22T14:15:00',
-        replies: [],
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          authorName: p.author.name,
+        }));
+
+        // Filtered posts based on params
+        let filtered = userPosts.slice();
+        if (params.search) {
+          const s = params.search.toLowerCase();
+          filtered = filtered.filter(p => p.title.toLowerCase().includes(s) || p.content.toLowerCase().includes(s));
+        }
+        if (params.status) {
+          filtered = filtered.filter(p => p.status === params.status);
+        }
+        if (params.fromDate) {
+          const from = new Date(params.fromDate).getTime();
+          filtered = filtered.filter(p => new Date(p.createdAt).getTime() >= from);
+        }
+        if (params.toDate) {
+          const to = new Date(params.toDate).getTime();
+          filtered = filtered.filter(p => new Date(p.createdAt).getTime() <= to);
+        }
+        if (params.favoritesOnly) {
+          filtered = filtered.filter(p => Object.values(p.favorites || {}).filter(Boolean).length > 0);
+        }
+
+        // sorting
+        const sortBy = params.sortBy || 'RECENT';
+        filtered.sort((a, b) => {
+          switch (sortBy) {
+            case 'TOP_VIEWS':
+              return (Object.values(b.views).reduce((x, y) => x + y, 0)) - (Object.values(a.views).reduce((x, y) => x + y, 0));
+            case 'TOP_LIKES':
+              return (Object.values(b.likes).reduce((x, y) => x + (typeof y === 'number' ? y : (y ? 1 : 0)), 0)) - (Object.values(a.likes).reduce((x, y) => x + (typeof y === 'number' ? y : (y ? 1 : 0)), 0));
+            case 'TOP_COMMENTS':
+              return Object.values(b.comments || {}).length - Object.values(a.comments || {}).length;
+            case 'RECENT':
+            default:
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
+        });
+
+        const totalElements = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(totalElements / size));
+        const start = page * size;
+        const content = filtered.slice(start, start + size).map(p => ({
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          excerpt: p.excerpt,
+          coverImageUrl: p.coverImageUrl,
+          shareToken: p.shareToken,
+          status: p.status,
+          isPublic: p.isPublic,
+          allowComments: p.allowComments,
+          metrics: {
+            views: Object.values(p.views).reduce((a, b) => a + b, 0),
+            likes: Object.values(p.likes).reduce((a, b) => a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0),
+            comments: Object.values(p.comments || {}).length,
+            recentActivity: [],
+          },
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          authorName: p.author.name,
+        }));
+
+        const dashboardResponse = {
+          totalPosts: userPosts.length,
+          publishedPosts: publishedCount,
+          draftPosts: draftsCount,
+          totalViews,
+          totalLikes,
+          totalComments,
+          totalFavorites,
+          recentPosts: {
+            content: recentContent,
+            pageNumber: 0,
+            pageSize: Math.max(5, size),
+            totalElements: recentSorted.length,
+            totalPages: Math.max(1, Math.ceil(recentSorted.length / Math.max(5, size))),
+            first: true,
+            last: true,
+            empty: recentContent.length === 0,
+          },
+          filteredPosts: {
+            content,
+            pageNumber: page,
+            pageSize: size,
+            totalElements,
+            totalPages,
+            first: page === 0,
+            last: page >= totalPages - 1,
+            empty: content.length === 0,
+          },
+        } as any;
+
+        return dashboardResponse;
       },
     },
-    metrics: { readingTimeMin: 7, wordCount: 1200 },
-    createdAt: '2025-11-20T09:00:00',
-    updatedAt: '2025-11-23T13:00:00',
-  },
-  {
-    id: 102,
-    author: { id: 1, name: 'Srinivas', email: 'srinivas@pranublog.com' },
-    title: 'Getting Started with React',
-    slug: 'getting-started-with-react',
-    shareToken: '',
-    content: '<h2>Why React?</h2><p>React is a powerful library for building user interfaces. This post covers the basics.</p>',
-    excerpt: 'A beginner-friendly guide to React fundamentals',
-    coverImageUrl: 'https://images.pexels.com/photos/11035380/pexels-photo-11035380.jpeg?auto=compress&cs=tinysrgb&w=800',
-    status: 'DRAFT',
-    isPublic: false,
-    allowComments: true,
-    views: {},
     likes: {},
     favorites: {},
     comments: {},
@@ -193,6 +254,21 @@ export const mockApi = {
       if (!post) {
         throw new Error('Post not found');
       }
+      return { ...post };
+    },
+    getPublic: async (shareToken: string, guestName?: string, viewerGuestId?: string, referrer?: string, userAgent?: string, skipView?: boolean): Promise<Post> => {
+      await delay(300);
+      const post = mockPosts.find(p => p.slug === shareToken || p.shareToken === shareToken);
+      if (!post) {
+        throw new Error('Post not found');
+      }
+
+      // When this endpoint is called without skipView, increment today's views
+      if (!skipView) {
+        const today = new Date().toISOString().slice(0, 10);
+        post.views[today] = (post.views[today] || 0) + 1;
+      }
+
       return { ...post };
     },
 
@@ -388,88 +464,5 @@ export const mockApi = {
       } as any;
     },
   },
-  dashboard: {
-    get: async () => {
-      return mockApi.analytics.getDashboardMetrics();
-    },
-
-    posts: async (params: {
-      page?: number;
-      size?: number;
-      title?: string;
-      status?: string;
-      createdFrom?: string;
-      createdTo?: string;
-      sortDirection?: 'ASC' | 'DESC';
-    } = {}) => {
-      await delay(300);
-      const page = params.page ?? 0;
-      const size = params.size ?? 10;
-
-      const userPosts = mockPosts.filter(p => p.author.id === currentUser?.id);
-
-      let filtered = userPosts.slice();
-
-      if (params.title) {
-        const t = params.title.toLowerCase();
-        filtered = filtered.filter(p => p.title.toLowerCase().includes(t));
-      }
-
-      if (params.status) {
-        filtered = filtered.filter(p => p.status === params.status);
-      }
-
-      if (params.createdFrom) {
-        const from = new Date(params.createdFrom).getTime();
-        filtered = filtered.filter(p => new Date(p.createdAt).getTime() >= from);
-      }
-
-      if (params.createdTo) {
-        const to = new Date(params.createdTo).getTime();
-        filtered = filtered.filter(p => new Date(p.createdAt).getTime() <= to);
-      }
-
-      filtered.sort((a, b) => {
-        const aTs = new Date(a.createdAt).getTime();
-        const bTs = new Date(b.createdAt).getTime();
-        if (params.sortDirection === 'ASC') return aTs - bTs;
-        return bTs - aTs;
-      });
-
-      const totalElements = filtered.length;
-      const totalPages = Math.max(1, Math.ceil(totalElements / size));
-      const start = page * size;
-      const content = filtered.slice(start, start + size).map(p => ({
-        id: p.id,
-        title: p.title,
-        slug: p.slug,
-        excerpt: p.excerpt,
-        content: p.content,
-        coverImageUrl: p.coverImageUrl,
-        shareToken: p.shareToken,
-        tags: [],
-        status: p.status,
-        isPublic: p.isPublic,
-        authorName: p.author.name,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        metrics: {
-          views: Object.values(p.views).reduce((a, b) => a + b, 0),
-          likes: Object.values(p.likes).reduce((a, b) => a + (typeof b === 'number' ? b : (b ? 1 : 0)), 0),
-          comments: Object.values(p.comments || {}).length,
-        },
-      }));
-
-      return {
-        content,
-        pageNumber: page,
-        pageSize: size,
-        totalElements,
-        totalPages,
-        first: page === 0,
-        last: page >= totalPages - 1,
-        empty: content.length === 0,
-      };
-    },
-  },
+  // dashboard: handled above with `dashboard.get(params)` returning metrics + paginated posts
 };

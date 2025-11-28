@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+// NOTE: This file now uses Font Awesome React components. If you haven't yet installed them,
+// run:
+// npm install @fortawesome/fontawesome-svg-core @fortawesome/free-solid-svg-icons @fortawesome/free-regular-svg-icons @fortawesome/react-fontawesome
+// (or yarn add ... / pnpm add ...)
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faLink, faCopy, faShare, faHeart as faHeartSolid, faReply, faComment, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faInstagram } from '@fortawesome/free-brands-svg-icons';
+import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import { getOrCreateGuestId, getOrAskGuestName } from '../lib/utils';
 import { Logo } from '../components/Logo';
@@ -29,6 +37,7 @@ interface Post {
     views: number;
     likes: number;
     comments: number;
+    readingTimeMin?: number;
   };
   likes: {
     count: number;
@@ -46,34 +55,71 @@ const CommentComponent: React.FC<{
   onReply: (parentId: string) => void;
 }> = ({ comment, shareToken, onReply }) => {
   const author = comment.userId ? `User ${comment.userId}` : (comment.guestName || 'Guest');
+  const [expanded, setExpanded] = useState(false);
+  const [commentLiked, setCommentLiked] = useState(false);
+  const [showReplies, setShowReplies] = useState(false);
+  const isLong = comment.content && comment.content.length > 260;
+  
+
   return (
     <div className="mb-4">
-      <div className="bg-gray-50 rounded-lg p-4">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#FFC312] rounded-full flex items-center justify-center text-sm font-bold text-gray-800">
+      <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-2 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-[#FFC312] rounded-full flex items-center justify-center text-sm font-bold text-gray-800 text-xs">
               {author[0].toUpperCase()}
             </div>
-            <div>
-              <div className="font-semibold text-gray-800 text-sm">{author}</div>
-              <div className="text-xs text-gray-500">
-                {new Date(comment.createdAt).toLocaleDateString()}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="font-semibold text-gray-800 text-sm truncate">{author}</div>
+                <div className="text-xs text-gray-400">•</div>
+                <div className="text-xs text-gray-400">{formatTimeAgo(comment.createdAt)}</div>
+                {comment.replies && comment.replies.length > 0 && (
+                  <div className="ml-2 text-xs text-gray-500">{comment.replies.length} repl{comment.replies.length > 1 ? 'ies' : 'y'}</div>
+                )}
+              </div>
+              <div className="text-sm text-gray-700 break-words mt-2">
+                {isLong && !expanded ? `${comment.content.slice(0, 260)}...` : comment.content}
+                {isLong && (
+                  <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="ml-2 text-xs text-gray-500 hover:underline"
+                  >
+                    {expanded ? 'Show less' : 'Show more'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setCommentLiked(!commentLiked)}
+              className={`p-2 rounded-md hover:bg-gray-100 ${commentLiked ? 'text-red-600' : 'text-gray-600'}`}
+              aria-pressed={commentLiked}
+              aria-label={commentLiked ? 'Unlike comment' : 'Like comment'}
+            >
+              <FontAwesomeIcon icon={commentLiked ? faHeartSolid : faHeartRegular} className="text-sm" />
+            </button>
+            <button
+              onClick={() => onReply(comment.commentId)}
+              className="p-2 rounded-md hover:bg-gray-100 text-[#521a5b]"
+              aria-label="Reply to comment"
+            >
+              <FontAwesomeIcon icon={faReply} className="text-xs" />
+            </button>
+          </div>
         </div>
-        <p className="text-gray-700 text-sm mb-2">{comment.content}</p>
-          <button
-          onClick={() => onReply(comment.commentId)}
-          className="text-xs text-[#521a5b] hover:underline"
-        >
-          Reply
-        </button>
       </div>
 
       {comment.replies && comment.replies.length > 0 && (
-        <div className="ml-8 mt-2 space-y-2">
-          {comment.replies.map((reply) => (
+        <div className="ml-10 mt-3 space-y-2">
+          <button
+            onClick={() => setShowReplies(!showReplies)}
+            className="text-xs text-gray-500 hover:underline mb-2"
+          >
+            {showReplies ? `Hide ${comment.replies.length} repl${comment.replies.length > 1 ? 'ies' : 'y'}` : `View ${comment.replies.length} repl${comment.replies.length > 1 ? 'ies' : 'y'}`}
+          </button>
+          {showReplies && comment.replies.map((reply) => (
             <CommentComponent
               key={reply.commentId}
               comment={reply}
@@ -102,6 +148,15 @@ export const PublicPost: React.FC = () => {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [isApiHit, setIsApiHit] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [instagramCopied, setInstagramCopied] = useState(false);
+
+  const displayReadingTime = post?.metrics?.readingTimeMin ? (isApiHit ? post.metrics.readingTimeMin * 2 : post.metrics.readingTimeMin) : undefined;
+  const viewsCount = post?.metrics?.views ?? ((Object.values((post as any)?.views || {}) as number[]).reduce((a, b) => a + b, 0) || 0);
+
+  const location = useLocation();
 
   useEffect(() => {
     // Ensure guest id and name exist
@@ -118,7 +173,12 @@ export const PublicPost: React.FC = () => {
     try {
       const guestId = localStorage.getItem('blog_guest_id') || getOrCreateGuestId();
       const guestName = localStorage.getItem('blog_guest_name') || getOrAskGuestName();
-      const postData = await apiClient.posts.getPublic(slug, guestName, guestId, 'direct', navigator.userAgent);
+      const query = new URLSearchParams(location.search);
+      const referrer = query.get('referrer') || 'direct';
+      const userAgentIsBot = /bot|crawler|spider|curl|wget|axios|node-fetch|python-requests/i.test(navigator.userAgent);
+      const skipView = query.get('skipView') === 'true' || userAgentIsBot;
+      if (skipView) setIsApiHit(true);
+      const postData = await apiClient.posts.getPublic(slug, guestName, guestId, referrer, navigator.userAgent, skipView);
       setPost(postData);
       setComments(postData.comments?.entries || []);
       // Determine like count and if the current viewer already liked
@@ -151,6 +211,8 @@ export const PublicPost: React.FC = () => {
       console.error('Failed to load post:', err);
     } finally {
       setLoading(false);
+      setMounted(true);
+      // If API hit we won't count the view - server should not increment.
     }
   };
 
@@ -209,6 +271,29 @@ export const PublicPost: React.FC = () => {
     }
   };
 
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard?.writeText(window.location.href);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1500);
+    } catch (e) {
+      console.error('Failed to copy share link', e);
+    }
+  };
+
+  const handleInstagramClick = async (url?: string) => {
+    const toOpen = url || (user && (user as any).instagram) || 'https://instagram.com';
+    try {
+      await navigator.clipboard?.writeText(toOpen);
+      setInstagramCopied(true);
+      setTimeout(() => setInstagramCopied(false), 1500);
+      // Open link in new tab
+      window.open(toOpen, '_blank');
+    } catch (e) {
+      console.error('Failed to copy/open instagram link', e);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f6f7fb] flex items-center justify-center">
@@ -225,23 +310,36 @@ export const PublicPost: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f6f7fb]">
       <nav className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
             <Logo className="text-[#521a5b]" />
-          {user ? (
-            <Button onClick={() => navigate('/dashboard')} variant="outline">
-              Dashboard
-            </Button>
-          ) : (
-            <Button onClick={() => navigate('/login')} className="bg-[#521a5b] hover:bg-[#6b2278]">
-              Log In
-            </Button>
-          )}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => handleInstagramClick((user as any)?.instagram)}
+              className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              title="Instagram"
+              aria-label="Open Instagram profile"
+            >
+              <FontAwesomeIcon icon={faInstagram} className="text-[#521a5b]" />
+            </button>
+            {instagramCopied && (
+              <div className="text-xs text-green-600">Copied!</div>
+            )}
+            {user ? (
+              <Button onClick={() => navigate('/dashboard')} variant="outline">
+                Dashboard
+              </Button>
+            ) : (
+              <Button onClick={() => navigate('/login')} className="bg-[#521a5b] hover:bg-[#6b2278]">
+                Log In
+              </Button>
+            )}
+          </div>
         </div>
       </nav>
 
-      <article className="max-w-4xl mx-auto px-6 py-12">
+      <article className={`max-w-7xl mx-auto px-6 lg:px-12 py-12 transition-opacity duration-300 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
         {post.coverImageUrl && (
-          <div className="mb-8">
+          <div className="mb-8 relative">
             {!imageError ? (
               <img
                 src={post.coverImageUrl}
@@ -258,72 +356,120 @@ export const PublicPost: React.FC = () => {
                 </div>
               </div>
             )}
-            {/* Show link and copy/open controls */}
-            <div className="flex items-center gap-3">
-              <a href={post.coverImageUrl} target="_blank" rel="noreferrer" className="text-sm text-[#521a5b] hover:underline">
-                Open image in new tab
-              </a>
+            {/* Minimal overlay controls for image: Open, Copy, Share */}
+            <div className="absolute right-4 bottom-4 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md p-1 shadow-sm">
               <button
-                type="button"
-                className="text-sm text-gray-600 hover:text-gray-800"
-                onClick={() => navigator.clipboard?.writeText(post.coverImageUrl)}
-              >
-                Copy image URL
-              </button>
-              <button
-                type="button"
-                className="text-sm text-gray-600 hover:text-gray-800"
                 onClick={() => window.open(post.coverImageUrl, '_blank')}
+                title="Open image in new tab"
+                className="p-2 rounded-md hover:bg-gray-100"
+                aria-label="Open image in new tab"
               >
-                Open
+                <FontAwesomeIcon icon={faLink} className="text-gray-600" />
               </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(post.coverImageUrl);
+                  setShareCopied(true);
+                  setTimeout(() => setShareCopied(false), 1500);
+                }}
+                title="Copy image URL"
+                className="p-2 rounded-md hover:bg-gray-100"
+                aria-label="Copy image URL"
+              >
+                <FontAwesomeIcon icon={faCopy} className="text-gray-600" />
+              </button>
+              <button
+                onClick={handleShare}
+                title="Share post"
+                className="p-2 rounded-md hover:bg-gray-100"
+                aria-label="Share post"
+              >
+                <FontAwesomeIcon icon={faShare} className="text-[#521a5b]" />
+              </button>
+              {shareCopied && <div className="text-xs text-green-600 ml-2">Copied!</div>}
             </div>
           </div>
         )}
 
         <header className="mb-8">
-          <h1 className="text-5xl font-bold text-gray-800 mb-4">{post.title}</h1>
+          <div className="flex items-start justify-between">
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4 leading-tight">{post.title}</h1>
+            <div className="flex items-center gap-2">
+            <button
+              onClick={handleShare}
+              className="hidden sm:inline-flex p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              title="Share post"
+              aria-label="Share post"
+            >
+              <FontAwesomeIcon icon={faShare} />
+            </button>
+            {shareCopied && (
+              <div className="hidden sm:block text-xs text-green-600">Copied!</div>
+            )}
+            </div>
+          </div>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-[#FFC312] rounded-full flex items-center justify-center text-sm font-bold text-gray-800">
                 {post.authorName[0].toUpperCase()}
               </div>
               <div>
-                <div className="font-semibold text-gray-800">{post.authorName}</div>
-                <div className="text-xs">
-                  {new Date(post.createdAt).toLocaleDateString()} · {post.metrics.views || 0} views
+                <div className="font-semibold text-gray-800 flex items-center gap-3">
+                  {post.authorName}
+                  {((post as any)?.authorInstagram || (user as any)?.instagram) && (
+                    <button
+                      onClick={() => handleInstagramClick((post as any)?.authorInstagram || (user as any)?.instagram)}
+                      className="p-1 rounded-md text-gray-600 hover:bg-gray-100"
+                      title="Visit Instagram"
+                      aria-label="Visit author's Instagram"
+                    >
+                      <FontAwesomeIcon icon={faInstagram} className="text-[#521a5b] text-sm" />
+                    </button>
+                  )}
+                  {instagramCopied && (
+                    <div className="text-xs text-green-600">Copied!</div>
+                  )}
                 </div>
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <FontAwesomeIcon icon={faEye} className="text-xs text-gray-400" />
+                      <span>{new Date(post.createdAt).toLocaleDateString()} · {viewsCount} views</span>
+                      {typeof displayReadingTime !== 'undefined' && (
+                        <span className="ml-3">· {displayReadingTime} min read{isApiHit ? ' (API)' : ''}</span>
+                      )}
+                    </div>
               </div>
             </div>
           </div>
         </header>
 
         {post.excerpt && (
-          <div className="text-xl text-gray-600 mb-8 pb-8 border-b border-gray-200 italic">
+          <div className="text-xl text-gray-600 mb-8 pb-8 border-b border-gray-500 italic">
             {post.excerpt}
           </div>
         )}
 
         <div
-          className="prose prose-lg max-w-none mb-12"
+          className="text-xl text-gray-600 mb-8 pb-8 border-b border-gray-200 work-sans"
           dangerouslySetInnerHTML={{ __html: post.content }}
         />
 
         <div className="border-t border-gray-200 pt-8 mb-12">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center justify-between gap-6">
             <button
               onClick={handleLike}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+              className={`flex items-center gap-2 p-2 rounded-full transition ${
                 liked
                   ? 'bg-red-100 text-red-600'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
+              aria-pressed={liked}
+              aria-label={liked ? 'Unlike post' : 'Like post'}
             >
-              <span className="text-xl">{liked ? '❤️' : '🤍'}</span>
-              <span className="font-semibold">{likeCount}</span>
+              <FontAwesomeIcon icon={liked ? faHeartSolid : faHeartRegular} className="text-lg" />
+              <span className="text-sm font-semibold">{likeCount}</span>
             </button>
             <div className="flex items-center gap-2 text-gray-600">
-              <span className="text-xl">💬</span>
+              <FontAwesomeIcon icon={faComment} className="text-lg" />
               <span className="font-semibold">{post.comments?.count || 0}</span>
             </div>
           </div>
@@ -396,3 +542,21 @@ export const PublicPost: React.FC = () => {
     </div>
   );
 };
+
+// Helpers
+function formatTimeAgo(dateStr: string) {
+  try {
+    const d = new Date(dateStr);
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return d.toLocaleDateString();
+  } catch (e) {
+    return dateStr;
+  }
+}

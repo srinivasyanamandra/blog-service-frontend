@@ -18,6 +18,13 @@
     "tailwindcss-animate": "1.0.7",
     "@radix-ui/react-slot": "^1.1.0",
     "class-variance-authority": "^0.7.0"
+  ,
+    "@fortawesome/fontawesome-svg-core": "^6.5.0",
+    "@fortawesome/free-solid-svg-icons": "^6.5.0",
+    "@fortawesome/free-regular-svg-icons": "^6.5.0",
+    "@fortawesome/react-fontawesome": "^0.2.0"
+    ,
+    "@fortawesome/free-brands-svg-icons": "^6.5.0"
   },
   "devDependencies": {
     "@types/react": "18.2.0",

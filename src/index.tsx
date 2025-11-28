@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ToastProvider } from './components/ui/ToastProvider';
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { PostEditor } from "./pages/PostEditor";
@@ -12,6 +13,7 @@ createRoot(document.getElementById("app") as HTMLElement).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/posts/:slug" element={<PublicPost />} />
@@ -41,6 +43,7 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

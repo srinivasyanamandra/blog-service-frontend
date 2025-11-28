@@ -47,11 +47,13 @@ export interface Comment {
 
 export interface DashboardMetrics {
   totalPosts: number;
-  published: number;
-  drafts: number;
+  publishedPosts: number;
+  draftPosts: number;
   totalViews: number;
   totalLikes: number;
-  topPosts: Array<{
+  totalComments?: number;
+  totalFavorites?: number;
+  topPosts?: Array<{
     id: number;
     title: string;
     views: number;
@@ -68,4 +70,32 @@ export interface PaginatedResult<T> {
   first: boolean;
   last: boolean;
   empty: boolean;
+}
+
+export interface DashboardPost {
+  id: number;
+  title: string;
+  slug?: string | null;
+  shareToken?: string;
+  excerpt?: string;
+  coverImageUrl?: string;
+  status?: string;
+  isPublic?: boolean;
+  allowComments?: boolean;
+  metrics?: { views?: number; likes?: number; comments?: number; recentActivity?: any[] };
+  createdAt?: string;
+  updatedAt?: string;
+  authorName?: string;
+}
+
+export interface DashboardResponse {
+  totalPosts: number;
+  publishedPosts: number;
+  draftPosts: number;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalFavorites: number;
+  recentPosts: PaginatedResult<DashboardPost>;
+  filteredPosts?: PaginatedResult<DashboardPost>;
 }
